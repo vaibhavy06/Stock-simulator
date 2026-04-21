@@ -1,0 +1,18 @@
+# Binaries
+*.exe
+*.o
+*.obj
+stock_simulator
+
+# Logs
+*.log
+
+# IDEs
+.vscode/
+.vs/
+*.swp
+*.swo
+
+# Data
+data/*.csv
+!data/sample.csv
