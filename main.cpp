@@ -24,6 +24,7 @@
 #include <limits>
 #include <chrono>
 #include <thread>
+#include "utils/MinGWThreadFix.h"
 
 // Engine layer
 #include "engine/MarketEngine.h"
@@ -92,7 +93,9 @@ static void printPortfolio(const Portfolio& portfolio,
     std::cout << "╠══════════════════════════════════════════════════════╣\n";
 
     bool hasPositions = false;
-    for (auto& [sym, pos] : portfolio.positions()) {
+    for (auto const& it : portfolio.positions()) {
+        const std::string& sym = it.first;
+        const auto& pos = it.second;
         if (pos.quantity > 0) {
             hasPositions = true;
             auto it = prices.find(sym);
@@ -178,7 +181,9 @@ static void runLiveSimulation(std::shared_ptr<Strategy> strategy,
         // Print price bar every 10 steps
         if (step % 10 == 0) {
             std::cout << "\n[Step " << std::setw(4) << step << "] Prices: ";
-            for (auto& [sym, stk] : marketEngine.stocks()) {
+            for (auto const& it : marketEngine.stocks()) {
+                const std::string& sym = it.first;
+                const auto& stk = it.second;
                 std::cout << sym << " $" << std::fixed << std::setprecision(2)
                           << stk.currentPrice << "  ";
             }
@@ -229,10 +234,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
     // Initialise logger
     std::string lvlStr = cfg.getString("LOG_LEVEL", "INFO");
-    LogLevel lvl = LogLevel::INFO;
-    if      (lvlStr == "DEBUG") lvl = LogLevel::DEBUG;
-    else if (lvlStr == "WARN")  lvl = LogLevel::WARN;
-    else if (lvlStr == "ERROR") lvl = LogLevel::ERROR;
+    LogLevel lvl = LogLevel::INF;
+    if      (lvlStr == "DEBUG") lvl = LogLevel::DBG;
+    else if (lvlStr == "WARN")  lvl = LogLevel::WRN;
+    else if (lvlStr == "ERROR") lvl = LogLevel::ERR;
     Logger::instance().init(cfg.getString("LOG_FILE", "simulator.log"), lvl);
 
     printBanner();

@@ -1,7 +1,6 @@
 #pragma once
 #include <string>
 #include <vector>
-#include <optional>
 #include "../models/Order.h"
 
 // Signal emitted by a strategy
@@ -15,6 +14,15 @@ struct Signal {
     bool isMarket() const { return price == 0.0; }
 };
 
+// Simple optional replacement for C++14/MinGW compatibility
+struct SignalResult {
+    bool hasValue;
+    Signal value;
+    
+    SignalResult() : hasValue(false) {}
+    SignalResult(const Signal& s) : hasValue(true), value(s) {}
+};
+
 // Abstract Strategy base class (Strategy Pattern + Open/Closed Principle)
 class Strategy {
 public:
@@ -22,10 +30,10 @@ public:
     virtual ~Strategy() = default;
 
     // Called each time step with the latest price for a symbol.
-    // Returns an optional signal if the strategy wants to act.
-    virtual std::optional<Signal> onPrice(const std::string& symbol,
-                                          double price,
-                                          int64_t timestamp) = 0;
+    // Returns a signal result if the strategy wants to act.
+    virtual SignalResult onPrice(const std::string& symbol,
+                                 double price,
+                                 int64_t timestamp) = 0;
 
     // Reset internal state (for backtesting across multiple runs)
     virtual void reset() = 0;

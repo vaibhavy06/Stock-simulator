@@ -67,18 +67,20 @@ public:
     // Total realized P&L across all positions
     double totalRealizedPnL() const {
         double total = 0.0;
-        for (auto& [sym, pos] : positions_) total += pos.realizedPnL;
+        for (auto const& it : positions_) total += it.second.realizedPnL;
         return total;
     }
 
     // Total unrealized P&L given current prices map
     double totalUnrealizedPnL(const std::unordered_map<std::string, double>& prices) const {
         double total = 0.0;
-        for (auto& [sym, pos] : positions_) {
+        for (auto const& it : positions_) {
+            const std::string& sym = it.first;
+            const auto& pos = it.second;
             if (pos.quantity > 0) {
-                auto it = prices.find(sym);
-                if (it != prices.end())
-                    total += pos.unrealizedPnL(it->second);
+                auto itPrice = prices.find(sym);
+                if (itPrice != prices.end())
+                    total += pos.unrealizedPnL(itPrice->second);
             }
         }
         return total;
@@ -87,11 +89,13 @@ public:
     // Total portfolio value = cash + market value of all positions
     double totalValue(const std::unordered_map<std::string, double>& prices) const {
         double total = cash_;
-        for (auto& [sym, pos] : positions_) {
+        for (auto const& it : positions_) {
+            const std::string& sym = it.first;
+            const auto& pos = it.second;
             if (pos.quantity > 0) {
-                auto it = prices.find(sym);
-                if (it != prices.end())
-                    total += pos.marketValue(it->second);
+                auto itPrice = prices.find(sym);
+                if (itPrice != prices.end())
+                    total += pos.marketValue(itPrice->second);
             }
         }
         return total;

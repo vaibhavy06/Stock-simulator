@@ -6,8 +6,16 @@
 #include <chrono>
 #include <iomanip>
 #include <sstream>
+#include "MinGWThreadFix.h"
 
-enum class LogLevel { DEBUG, INFO, WARN, ERROR };
+#include <chrono>
+#include "MinGWThreadFix.h"
+
+#ifdef ERROR
+#undef ERROR
+#endif
+
+enum class LogLevel { DBG, INF, WRN, ERR };
 
 class Logger {
 public:
@@ -16,7 +24,7 @@ public:
         return inst;
     }
 
-    void init(const std::string& filename, LogLevel minLevel = LogLevel::INFO) {
+    void init(const std::string& filename, LogLevel minLevel = LogLevel::INF) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (fileOut_.is_open()) fileOut_.close();
         fileOut_.open(filename, std::ios::out | std::ios::trunc);
@@ -31,10 +39,10 @@ public:
         if (fileOut_.is_open()) { fileOut_ << entry << "\n"; fileOut_.flush(); }
     }
 
-    void info (const std::string& msg) { log(LogLevel::INFO,  msg); }
-    void warn (const std::string& msg) { log(LogLevel::WARN,  msg); }
-    void error(const std::string& msg) { log(LogLevel::ERROR, msg); }
-    void debug(const std::string& msg) { log(LogLevel::DEBUG, msg); }
+    void info (const std::string& msg) { log(LogLevel::INF,  msg); }
+    void warn (const std::string& msg) { log(LogLevel::WRN,  msg); }
+    void error(const std::string& msg) { log(LogLevel::ERR, msg); }
+    void debug(const std::string& msg) { log(LogLevel::DBG, msg); }
 
     ~Logger() { if (fileOut_.is_open()) fileOut_.close(); }
 
@@ -42,7 +50,7 @@ private:
     Logger() = default;
     std::mutex   mutex_;
     std::ofstream fileOut_;
-    LogLevel     minLevel_ = LogLevel::INFO;
+    LogLevel     minLevel_ = LogLevel::INF;
 
     static std::string timestamp() {
         auto now = std::chrono::system_clock::now();
@@ -54,10 +62,10 @@ private:
 
     static std::string levelStr(LogLevel l) {
         switch (l) {
-            case LogLevel::DEBUG: return "DEBUG";
-            case LogLevel::INFO:  return "INFO ";
-            case LogLevel::WARN:  return "WARN ";
-            case LogLevel::ERROR: return "ERROR";
+            case LogLevel::DBG: return "DEBUG";
+            case LogLevel::INF:  return "INFO ";
+            case LogLevel::WRN:  return "WARN ";
+            case LogLevel::ERR: return "ERROR";
         }
         return "?????";
     }

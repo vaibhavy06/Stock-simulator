@@ -1,42 +1,54 @@
 #include "MomentumStrategy.h"
 #include <sstream>
 
-std::optional<Signal> MomentumStrategy::onPrice(
-        const std::string& symbol, double price, int64_t /*timestamp*/) {
-
-    auto& win = windows_[symbol];
-    win.prices.push_back(price);
-    if ((int)win.prices.size() > lookback_ + 1) win.prices.pop_front();
-
-    // Manage cooldown timer
-    auto& cd = cooldownCounter_[symbol];
-    if (cd > 0) { --cd; return std::nullopt; }
-
-    if ((int)win.prices.size() < lookback_) return std::nullopt;
-
-    // Rate of change: (current - oldest) / oldest
-    double oldest   = win.prices.front();
-    double momentum = (price - oldest) / oldest; // fractional change
-
-    auto& inPos = inPosition_[symbol];
-    std::optional<Signal> signal;
-
-    if (!inPos && momentum > threshold_) {
-        std::ostringstream reason;
-        reason << "Positive momentum " << (momentum * 100.0) << "% > "
-               << (threshold_ * 100.0) << "% threshold";
-        signal = Signal{symbol, OrderSide::BUY, tradeQty_, 0.0, reason.str()};
-        inPos = true;
-        cd = cooldown_;
-
-    } else if (inPos && momentum < -threshold_) {
-        std::ostringstream reason;
-        reason << "Negative momentum " << (momentum * 100.0) << "% < -"
-               << (threshold_ * 100.0) << "% threshold";
-        signal = Signal{symbol, OrderSide::SELL, tradeQty_, 0.0, reason.str()};
-        inPos = false;
-        cd = cooldown_;
+SignalResult MomentumStrategy::onPrice(const std::string& symbol,
+                                    double price,
+                                    int64_t timestamp) {
+    auto& history = priceHistory_[symbol];
+    history.push_back(price);
+    
+    if ((int)history.size() > lookback_) {
+        history.pop_front();
     }
 
-    return signal;
+    if (cooldownCounter_[symbol] > 0) {
+        cooldownCounter_[symbol]--;
+        return SignalResult();
+    }
+
+    if ((int)history.size() < lookback_) {
+        return SignalResult();
+    }
+
+    double oldPrice = history.front();
+    double returns  = (price - oldPrice) / oldPrice;
+
+    if (returns > threshold_) {
+        // Strong positive momentum -> BUY
+        Signal sig;
+        sig.symbol   = symbol;
+        sig.side     = OrderSide::BUY;
+        sig.quantity = tradeQty_;
+        sig.price    = 0.0;
+        std::ostringstream oss;
+        oss << "Positive Momentum (" << (returns * 100.0) << "%)";
+        sig.reason   = oss.str();
+        cooldownCounter_[symbol] = cooldown_;
+        return SignalResult(sig);
+    } 
+    else if (returns < -threshold_) {
+        // Strong negative momentum -> SELL
+        Signal sig;
+        sig.symbol   = symbol;
+        sig.side     = OrderSide::SELL;
+        sig.quantity = tradeQty_;
+        sig.price    = 0.0;
+        std::ostringstream oss;
+        oss << "Negative Momentum (" << (returns * 100.0) << "%)";
+        sig.reason   = oss.str();
+        cooldownCounter_[symbol] = cooldown_;
+        return SignalResult(sig);
+    }
+
+    return SignalResult();
 }

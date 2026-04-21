@@ -3,6 +3,8 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <mutex>
+#include "../utils/MinGWThreadFix.h"
 #include "../strategies/Strategy.h"
 #include "../models/Portfolio.h"
 #include "MatchingEngine.h"

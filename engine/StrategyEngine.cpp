@@ -4,47 +4,49 @@
 void StrategyEngine::onPrice(const std::string& symbol,
                               double price, int64_t timestamp) {
     for (auto& strategy : strategies_) {
-        auto signal = strategy->onPrice(symbol, price, timestamp);
-        if (!signal) continue;
+        auto signalRes = strategy->onPrice(symbol, price, timestamp);
+        if (!signalRes.hasValue) continue;
+        
+        auto& signal = signalRes.value;
 
         // Validate signal against portfolio state
-        if (signal->side == OrderSide::BUY) {
-            double cost = price * signal->quantity;
-            if (!canBuy(symbol, signal->quantity, price)) {
+        if (signal.side == OrderSide::BUY) {
+            double cost = price * signal.quantity;
+            if (!canBuy(symbol, signal.quantity, price)) {
                 std::ostringstream oss;
                 oss << "[" << strategy->name() << "] SKIP BUY " << symbol
-                    << " x" << signal->quantity << " - insufficient cash ($"
+                    << " x" << signal.quantity << " - insufficient cash ($"
                     << portfolio_.cash() << " needed ~$" << cost << ")";
                 LOG_DEBUG(oss.str());
                 continue;
             }
         } else {
-            if (!canSell(symbol, signal->quantity)) {
+            if (!canSell(symbol, signal.quantity)) {
                 std::ostringstream oss;
                 oss << "[" << strategy->name() << "] SKIP SELL " << symbol
-                    << " x" << signal->quantity << " - no position";
+                    << " x" << signal.quantity << " - no position";
                 LOG_DEBUG(oss.str());
                 continue;
             }
         }
 
         // Build and submit order
-        OrderType otype = signal->isMarket() ? OrderType::MARKET : OrderType::LIMIT;
-        Order order(symbol, otype, signal->side,
-                    signal->isMarket() ? price : signal->price,
-                    signal->quantity, timestamp, strategy->name());
+        OrderType otype = signal.isMarket() ? OrderType::MARKET : OrderType::LIMIT;
+        Order order(symbol, otype, signal.side,
+                    signal.isMarket() ? price : signal.price,
+                    signal.quantity, timestamp, strategy->name());
 
         std::ostringstream log;
         log << "[STRATEGY:" << strategy->name() << "] "
             << order.sideStr() << " " << symbol
-            << " x" << signal->quantity
-            << " @ " << (signal->isMarket() ? price : signal->price)
-            << " | " << signal->reason;
+            << " x" << signal.quantity
+            << " @ " << (signal.isMarket() ? price : signal.price)
+            << " | " << signal.reason;
         LOG_INFO(log.str());
 
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            pendingOrders_[order.id] = {signal->side, symbol};
+            pendingOrders_[order.id] = {signal.side, symbol};
         }
         matchingEngine_.submitOrder(order, timestamp);
     }
@@ -83,8 +85,6 @@ void StrategyEngine::onTrade(const Trade& trade) {
         // Record win/loss for sell trades
         if (side == OrderSide::SELL) {
             const auto* pos = portfolio_.position(trade.symbol);
-            // If avgCost is tracked before this sell, check PnL
-            // Simplified: record based on realized PnL direction
             if (pos) {
                 portfolio_.recordTradeResult(pos->realizedPnL > 0);
             }

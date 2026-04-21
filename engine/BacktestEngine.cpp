@@ -32,36 +32,42 @@ BacktestResult BacktestEngine::run(std::shared_ptr<Strategy> strategy) {
 
     // Replay data in timestamp order
     for (const auto& rec : data_) {
-        auto signal = strategy->onPrice(rec.symbol, rec.price, rec.timestamp);
-        if (!signal) {
+        auto signalRes = strategy->onPrice(rec.symbol, rec.price, rec.timestamp);
+        if (!signalRes.hasValue) {
             // Still record portfolio value for drawdown
             std::unordered_map<std::string, double> prices;
-            for (auto& [sym, _] : holdings) prices[sym] = rec.price;
+            for (auto const& it : holdings) prices[it.first] = rec.price;
             double val = portfolio.cash();
-            for (auto& [sym, qty] : holdings) {
-                auto it = prices.find(sym);
-                if (it != prices.end()) val += qty * it->second;
+            for (auto const& it : holdings) {
+                const std::string& sym = it.first;
+                int qty = it.second;
+                auto itPrice = prices.find(sym);
+                if (itPrice != prices.end()) val += qty * itPrice->second;
             }
             portfolio.recordValue(val);
             continue;
         }
+        
+        auto& signal = signalRes.value;
 
-        processSignal(*signal, rec.price, rec.timestamp,
+        processSignal(signal, rec.price, rec.timestamp,
                       portfolio, tradeResults, wins, losses);
 
         // Update holdings tracking
-        if (signal->side == OrderSide::BUY) {
-            holdings[rec.symbol]  += signal->quantity;
-            double prev = avgCost[rec.symbol] * (holdings[rec.symbol] - signal->quantity);
-            avgCost[rec.symbol] = (prev + rec.price * signal->quantity) / holdings[rec.symbol];
+        if (signal.side == OrderSide::BUY) {
+            holdings[rec.symbol]  += signal.quantity;
+            double prev = avgCost[rec.symbol] * (holdings[rec.symbol] - signal.quantity);
+            avgCost[rec.symbol] = (prev + rec.price * signal.quantity) / holdings[rec.symbol];
         } else {
-            holdings[rec.symbol] = std::max(0, holdings[rec.symbol] - signal->quantity);
+            holdings[rec.symbol] = std::max(0, holdings[rec.symbol] - signal.quantity);
             if (holdings[rec.symbol] == 0) avgCost[rec.symbol] = 0.0;
         }
 
         // Record portfolio value snapshot for drawdown / Sharpe
         double val = portfolio.cash();
-        for (auto& [sym, qty] : holdings) val += qty * rec.price;
+        for (auto const& it : holdings) {
+            val += it.second * rec.price;
+        }
         portfolio.recordValue(val);
     }
 
@@ -70,7 +76,9 @@ BacktestResult BacktestEngine::run(std::shared_ptr<Strategy> strategy) {
     for (auto& rec : data_) lastPrice[rec.symbol] = rec.price;
 
     double finalCash = portfolio.cash();
-    for (auto& [sym, qty] : holdings) {
+    for (auto const& it : holdings) {
+        const std::string& sym = it.first;
+        int qty = it.second;
         if (qty > 0 && lastPrice.count(sym)) {
             finalCash += qty * lastPrice[sym];
         }

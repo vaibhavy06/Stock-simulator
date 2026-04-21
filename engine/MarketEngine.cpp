@@ -11,7 +11,9 @@ void MarketEngine::addStock(const std::string& symbol,
 }
 
 void MarketEngine::stepAll(int64_t timestamp) {
-    for (auto& [sym, stock] : stocks_) {
+    for (auto it = stocks_.begin(); it != stocks_.end(); ++it) {
+        const std::string& sym = it->first;
+        Stock& stock = it->second;
         double newPrice = randomWalkStep(stock);
         stock.updatePrice(newPrice);
         seedLiquidity(sym, timestamp);
@@ -24,16 +26,18 @@ void MarketEngine::stepAllParallel(int64_t timestamp) {
     std::vector<std::thread> threads;
     threads.reserve(stocks_.size());
 
-    for (auto& [sym, stock] : stocks_) {
-        threads.emplace_back([this, &sym = sym, &stock = stock, timestamp]() {
+    for (auto it = stocks_.begin(); it != stocks_.end(); ++it) {
+        const std::string* pSym = &(it->first);
+        Stock* pStock = &(it->second);
+        threads.emplace_back([this, pSym, pStock, timestamp]() {
             double newPrice;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                newPrice = randomWalkStep(stock);
-                stock.updatePrice(newPrice);
+                newPrice = randomWalkStep(*pStock);
+                pStock->updatePrice(newPrice);
             }
-            seedLiquidity(sym, timestamp);
-            for (auto& cb : priceCallbacks_) cb(sym, newPrice, timestamp);
+            seedLiquidity(*pSym, timestamp);
+            for (auto& cb : priceCallbacks_) cb(*pSym, newPrice, timestamp);
         });
     }
 
@@ -75,6 +79,8 @@ const Stock* MarketEngine::getStock(const std::string& symbol) const {
 
 std::unordered_map<std::string, double> MarketEngine::currentPrices() const {
     std::unordered_map<std::string, double> prices;
-    for (auto& [sym, s] : stocks_) prices[sym] = s.currentPrice;
+    for (auto it = stocks_.begin(); it != stocks_.end(); ++it) {
+        prices[it->first] = it->second.currentPrice;
+    }
     return prices;
 }

@@ -1,46 +1,61 @@
 #include "MovingAverageStrategy.h"
+#include <numeric>
 #include <sstream>
 
-std::optional<Signal> MovingAverageStrategy::onPrice(
-        const std::string& symbol, double price, int64_t /*timestamp*/) {
-
-    auto& win = windows_[symbol];
-    win.prices.push_back(price);
-
-    // Need at least longPeriod_ data points
-    if ((int)win.prices.size() > longPeriod_ + 1)
-        win.prices.pop_front();
-
-    if ((int)win.prices.size() < longPeriod_)
-        return std::nullopt; // Not enough data yet
-
-    double shortMA = sma(win.prices, shortPeriod_);
-    double longMA  = sma(win.prices, longPeriod_);
-    bool currentAbove = (shortMA > longMA);
-
-    if (!win.initialized) {
-        win.lastAbove   = currentAbove;
-        win.initialized = true;
-        return std::nullopt;
+SignalResult MovingAverageStrategy::onPrice(const std::string& symbol,
+                                           double price,
+                                           int64_t timestamp) {
+    auto& window = windows_[symbol];
+    window.push_back(price);
+    if ((int)window.size() > longPeriod_) {
+        window.pop_front();
     }
 
-    std::optional<Signal> signal;
-
-    if (!win.lastAbove && currentAbove) {
-        // Golden cross: short MA just crossed above long MA => BUY
-        std::ostringstream reason;
-        reason << "Golden cross SMA" << shortPeriod_ << "(" << shortMA
-               << ") > SMA" << longPeriod_ << "(" << longMA << ")";
-        signal = Signal{symbol, OrderSide::BUY, tradeQty_, 0.0, reason.str()};
-
-    } else if (win.lastAbove && !currentAbove) {
-        // Death cross: short MA just crossed below long MA => SELL
-        std::ostringstream reason;
-        reason << "Death cross SMA" << shortPeriod_ << "(" << shortMA
-               << ") < SMA" << longPeriod_ << "(" << longMA << ")";
-        signal = Signal{symbol, OrderSide::SELL, tradeQty_, 0.0, reason.str()};
+    if ((int)window.size() < longPeriod_) {
+        return SignalResult();
     }
 
-    win.lastAbove = currentAbove;
-    return signal;
+    // Calculate averages
+    auto itShort = window.end() - shortPeriod_;
+    double avgShort = std::accumulate(itShort, window.end(), 0.0) / shortPeriod_;
+    double avgLong  = std::accumulate(window.begin(), window.end(), 0.0) / longPeriod_;
+
+    // Check for crossover
+    bool shortAbove = (avgShort > avgLong);
+    
+    // Default last state is whatever it is now (no cross on first step)
+    if (lastCross_.find(symbol) == lastCross_.end()) {
+        lastCross_[symbol] = shortAbove;
+        return SignalResult();
+    }
+
+    bool prevShortAbove = lastCross_[symbol];
+    lastCross_[symbol] = shortAbove;
+
+    if (shortAbove && !prevShortAbove) {
+        // Golden Cross -> BUY
+        Signal sig;
+        sig.symbol   = symbol;
+        sig.side     = OrderSide::BUY;
+        sig.quantity = tradeQty_;
+        sig.price    = 0.0; // Market order
+        std::ostringstream oss;
+        oss << "Golden Cross (MA" << shortPeriod_ << " > MA" << longPeriod_ << ")";
+        sig.reason   = oss.str();
+        return SignalResult(sig);
+    } 
+    else if (!shortAbove && prevShortAbove) {
+        // Death Cross -> SELL
+        Signal sig;
+        sig.symbol   = symbol;
+        sig.side     = OrderSide::SELL;
+        sig.quantity = tradeQty_;
+        sig.price    = 0.0; // Market order
+        std::ostringstream oss;
+        oss << "Death Cross (MA" << shortPeriod_ << " < MA" << longPeriod_ << ")";
+        sig.reason   = oss.str();
+        return SignalResult(sig);
+    }
+
+    return SignalResult();
 }

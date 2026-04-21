@@ -3,7 +3,9 @@
 #include <map>
 #include <deque>
 #include <vector>
+#include <unordered_map>
 #include <mutex>
+#include "../utils/MinGWThreadFix.h"
 #include <functional>
 #include "../models/Order.h"
 #include "../models/Trade.h"

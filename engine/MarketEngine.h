@@ -7,6 +7,7 @@
 #include <thread>
 #include <atomic>
 #include <functional>
+#include "../utils/MinGWThreadFix.h"
 #include "../models/Stock.h"
 #include "../models/Order.h"
 #include "MatchingEngine.h"

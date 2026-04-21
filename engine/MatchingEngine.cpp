@@ -17,7 +17,8 @@ bool MatchingEngine::cancelOrder(uint64_t orderId,
     std::lock_guard<std::mutex> lock(mutex_);
     if (side == OrderSide::BUY) {
         auto& bids = bidBooks_[symbol];
-        for (auto& [price, dq] : bids) {
+        for (auto itBook = bids.begin(); itBook != bids.end(); ++itBook) {
+            auto& dq = itBook->second;
             for (auto it = dq.begin(); it != dq.end(); ++it) {
                 if (it->id == orderId) {
                     it->status = OrderStatus::CANCELLED;
@@ -28,7 +29,8 @@ bool MatchingEngine::cancelOrder(uint64_t orderId,
         }
     } else {
         auto& asks = askBooks_[symbol];
-        for (auto& [price, dq] : asks) {
+        for (auto itBook = asks.begin(); itBook != asks.end(); ++itBook) {
+            auto& dq = itBook->second;
             for (auto it = dq.begin(); it != dq.end(); ++it) {
                 if (it->id == orderId) {
                     it->status = OrderStatus::CANCELLED;
